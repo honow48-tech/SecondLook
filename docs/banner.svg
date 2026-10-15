@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-label="SecondLook: check a used Windows PC before you pay">
+  <style>
+    .sans{font-family:"Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif}
+    .mono{font-family:ui-monospace,"Cascadia Mono",SFMono-Regular,Consolas,monospace}
+    .in{opacity:0;animation:in .7s cubic-bezier(.2,.7,.1,1) forwards}
+    .d1{animation-delay:.1s}.d2{animation-delay:.25s}.d3{animation-delay:.4s}
+    .r1{animation-delay:1.9s}.r2{animation-delay:2.05s}.r3{animation-delay:2.2s}.r4{animation-delay:2.35s}.r5{animation-delay:2.5s}
+    .fill{transform-box:fill-box;transform-origin:left;transform:scaleX(0);animation:fill 1.4s cubic-bezier(.2,.7,.1,1) 2.6s forwards}
+    .type{animation:type 1.4s steps(37) .7s forwards}
+    .caret{animation:blink 1s steps(1) infinite}
+    @keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+    @keyframes fill{to{transform:scaleX(1)}}
+    @keyframes type{to{transform:translateX(337px)}}
+    @keyframes blink{50%{opacity:0}}
+    @media (prefers-reduced-motion:reduce){.in,.fill{animation:none;opacity:1;transform:none}.type{display:none}}
+  </style>
+  <defs><clipPath id="cmd"><rect x="72" y="282" width="470" height="52" rx="10"/></clipPath></defs>
+
+  <rect width="1280" height="420" rx="18" fill="#fbfbf9"/>
+  <rect x=".5" y=".5" width="1279" height="419" rx="17.5" fill="none" stroke="#e8e7e1"/>
+
+  <!-- left: name, line, command -->
+  <text x="72" y="118" class="mono in d1" font-size="13" letter-spacing="2" fill="#6d6c66">USED WINDOWS PC CHECK</text>
+  <text x="68" y="196" class="sans in d2" font-size="76" font-weight="600" letter-spacing="-2.5" fill="#1a1a19">SecondLook</text>
+  <text x="72" y="240" class="sans in d3" font-size="21" fill="#6d6c66">Know what you're buying before you pay.</text>
+
+  <g class="in d3" clip-path="url(#cmd)">
+    <rect x="72" y="282" width="470" height="52" fill="#1a1a19"/>
+    <text x="94" y="314" class="mono" font-size="15" fill="#e9e8e3"><tspan fill="#8a897f">PS&gt;</tspan> irm …/SecondLook/main/check.ps1 | iex</text>
+    <!-- cover + caret slide right together to "type" the command -->
+    <g class="type">
+      <rect x="132" y="290" width="420" height="36" fill="#1a1a19"/>
+      <rect x="132" y="299" width="8" height="19" fill="#7cc2a3" class="caret"/>
+    </g>
+  </g>
+
+  <!-- right: a miniature report -->
+  <g class="in d2">
+    <rect x="660" y="54" width="548" height="312" rx="14" fill="#fff" stroke="#e8e7e1"/>
+    <text x="692" y="98" class="sans" font-size="19" font-weight="600" fill="#1a1a19">GF63 Thin 10SC</text>
+    <circle cx="1040" cy="92" r="4" fill="#9a5b10"/>
+    <text x="1052" y="97" class="sans" font-size="13" font-weight="500" fill="#1a1a19">Worth a second look</text>
+    <rect x="692" y="116" width="484" height="1.5" fill="#1a1a19"/>
+  </g>
+
+  <g class="sans" font-size="14" fill="#1a1a19">
+    <g class="in r1"><circle cx="696" cy="148" r="3.5" fill="#9a5b10"/><text x="710" y="153">Remote access app installed</text>
+      <text x="1176" y="153" text-anchor="end" class="mono" font-size="12" fill="#6d6c66">AnyDesk</text><rect x="692" y="170" width="484" height="1" fill="#e8e7e1"/></g>
+    <g class="in r2"><circle cx="696" cy="192" r="3.5" fill="#2f6b52"/><text x="710" y="197">Not managed by a company</text>
+      <text x="1176" y="197" text-anchor="end" class="mono" font-size="12" fill="#6d6c66">no domain, Azure AD or MDM</text><rect x="692" y="214" width="484" height="1" fill="#e8e7e1"/></g>
+    <g class="in r3"><circle cx="696" cy="236" r="3.5" fill="#2f6b52"/><text x="710" y="241">Windows activated</text>
+      <text x="1176" y="241" text-anchor="end" class="mono" font-size="12" fill="#6d6c66">OEM · matches BIOS</text><rect x="692" y="258" width="484" height="1" fill="#e8e7e1"/></g>
+    <g class="in r4"><circle cx="696" cy="280" r="3.5" fill="#2f6b52"/><text x="710" y="285">SSD 80% life left</text>
+      <rect x="1096" y="279" width="80" height="3" fill="#e8e7e1"/><rect x="1096" y="279" width="64" height="3" fill="#2f6b52" class="fill"/>
+      <rect x="692" y="302" width="484" height="1" fill="#e8e7e1"/></g>
+    <g class="in r5"><circle cx="696" cy="324" r="3.5" fill="#2f6b52"/><text x="710" y="329">Battery 90% of original capacity</text>
+      <text x="1176" y="329" text-anchor="end" class="mono" font-size="12" fill="#6d6c66">46,056 / 51,300 mWh</text></g>
+  </g>
+</svg>

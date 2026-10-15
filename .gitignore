@@ -1,0 +1,4 @@
+# Reports and unrelated local files
+*.report.html
+secondlook-*.html
+pc-report-*.html
