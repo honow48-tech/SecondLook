@@ -66,6 +66,8 @@ The report opens in the browser. Nothing is installed and nothing is uploaded.
 | SSD life | Read from the drive's own health log, the same number as *Settings → Disks*. Also spare, temperature, hours, TB written, unsafe shutdowns. |
 | Battery | Capacity left compared with new, and charge cycles. |
 | Devices | Anything with a driver problem in Device Manager. |
+| RAM | Running below rated speed (XMP / EXPO off), single stick, mixed sticks. |
+| GPU | Real VRAM from the driver, to catch fake re-flashed cards. |
 
 **Specs and license**
 
@@ -81,7 +83,12 @@ Every product key on the PC, whether it's activated, and whether it's **OEM** (s
 
 **Check by hand**
 
-A tick list for what software can't see: the serial sticker matches, hinges, swollen battery, every port, the charger, a 10-minute stress test, BIOS password, receipt and warranty.
+A tick list for what software can't see, picked for laptop or desktop:
+
+- **Laptop:** serial sticker, hinges, swollen battery, every port, the charger, a 10-minute stress test.
+- **Desktop:** inside the case (dust, bulging capacitors), PSU brand and wattage, GPU mining wear, fans, front and rear ports, CPU + GPU stress test, CMOS battery.
+
+Custom-built desktops with no model name are named after their motherboard.
 
 <br>
 

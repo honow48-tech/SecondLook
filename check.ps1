@@ -74,6 +74,22 @@ $gpus = @(Get-CimInstance Win32_VideoController)
 $ram = @(Get-CimInstance Win32_PhysicalMemory)
 $ramGB = [math]::Round(($ram | Measure-Object Capacity -Sum).Sum / 1GB)
 $slots = (Get-CimInstance Win32_PhysicalMemoryArray | Measure-Object MemoryDevices -Sum).Sum
+# Custom-built desktops leave maker / model / serial as placeholders; fall back to the motherboard.
+$generic = '^\s*$|System Product Name|System manufacturer|To Be Filled|Default string|O\.E\.M|Not Applicable|^System$'
+$maker = if ($cs.Manufacturer -match $generic) { $board.Manufacturer } else { $cs.Manufacturer }
+$model = if ($cs.Model -match $generic) { "$($board.Product) (custom build)" } else { $cs.Model }
+$serial = if ($bios.SerialNumber -match $generic) { $board.SerialNumber } else { $bios.SerialNumber }
+$chassis = @((Get-CimInstance Win32_SystemEnclosure).ChassisTypes)
+$chassisName = @{ 3 = 'Desktop'; 4 = 'Desktop'; 5 = 'Desktop'; 6 = 'Mini tower'; 7 = 'Tower'; 8 = 'Portable'; 9 = 'Laptop'; 10 = 'Notebook'; 13 = 'All-in-one'
+    14 = 'Notebook'; 15 = 'Small form factor'; 16 = 'Small form factor'; 30 = 'Tablet'; 31 = 'Convertible'; 32 = 'Detachable'; 35 = 'Mini PC'; 36 = 'Stick PC' }
+$pcType = @($chassis | % { $chassisName[[int]$_] } | ? { $_ }) | Select-Object -First 1
+# Real VRAM: Win32_VideoController.AdapterRAM caps at 4 GB, the driver's registry entry doesn't.
+$vram = @{}
+Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0*' -ErrorAction SilentlyContinue | % {
+    $m = $_.'HardwareInformation.qwMemorySize'; if (-not $m) { $m = $_.'HardwareInformation.MemorySize' }
+    if ($m -is [byte[]]) { $m = [BitConverter]::ToUInt32($m, 0) }
+    if ($m -and $_.DriverDesc) { $vram[$_.DriverDesc] = [double]$m } }
+function Size($b) { if ($b -ge 1GB) { '{0:N0} GB' -f ($b / 1GB) } elseif ($b) { '{0:N0} MB' -f ($b / 1MB) } }
 
 Write-Host '  - drives'
 $disks = foreach ($p in Get-PhysicalDisk | Sort-Object { [int]$_.DeviceId }) {
@@ -107,6 +123,8 @@ try {
 } catch {}
 Remove-Item $bx -ErrorAction SilentlyContinue
 $battPct = if ($batt) { [math]::Round(100 * [double]$batt.FullChargeCapacity / [double]$batt.DesignCapacity) }
+# ponytail: laptop = portable chassis or a battery. A desktop on a USB UPS may read as laptop; add a chassis override if that shows up.
+$isLaptop = [bool]$batt -or [bool]($chassis | ? { $_ -in 8, 9, 10, 11, 12, 14, 18, 21, 30, 31, 32 })
 
 $crashEv = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 41, 1001; StartTime = (Get-Date).AddDays(-30) } -ErrorAction SilentlyContinue |
     ? { $_.Id -eq 41 -or $_.ProviderName -match 'BugCheck|WER-SystemErrorReporting' })
@@ -180,7 +198,7 @@ $bt = Get-PnpDevice -Class Bluetooth -PresentOnly -ErrorAction SilentlyContinue 
 $monIds = @(Get-CimInstance -Namespace root\wmi WmiMonitorID -ErrorAction SilentlyContinue)
 $screens = @(Get-CimInstance -Namespace root\wmi WmiMonitorBasicDisplayParams -ErrorAction SilentlyContinue | % {
     $m = $_; $id = $monIds | ? InstanceName -eq $m.InstanceName
-    $name = -join (@($id.UserFriendlyName) | ? { $_ } | % { [char]$_ }); if (-not $name) { $name = 'Built-in' }
+    $name = -join (@($id.UserFriendlyName) | ? { $_ } | % { [char]$_ }); if (-not $name) { $name = if ($isLaptop) { 'Built-in' } else { 'Monitor' } }
     '{0} {1} {2:N1} in' -f $name, $dot, ([math]::Sqrt([math]::Pow($m.MaxHorizontalImageSize, 2) + [math]::Pow($m.MaxVerticalImageSize, 2)) / 2.54)
 })
 $res = @($gpus | ? CurrentHorizontalResolution | % { "$($_.CurrentHorizontalResolution) x $($_.CurrentVerticalResolution) @ $($_.CurrentRefreshRate) Hz" }) | Select-Object -First 1
@@ -202,6 +220,10 @@ $checks = @(
         if ($x.Errors) { Check review "$($x.Name) media errors" "$($x.Errors)" }
         if ($x.Realloc) { Check review "$($x.Name) reallocated sectors" "$($x.Realloc)" }
     }
+    $slow = @($ram | ? { $_.ConfiguredClockSpeed -and $_.Speed -and $_.ConfiguredClockSpeed -lt $_.Speed })
+    if ($slow) { Check note "RAM at $($slow[0].ConfiguredClockSpeed) of $($slow[0].Speed) MHz" 'XMP / EXPO off in BIOS, or CPU limit' }
+    if ($ram.Count -eq 1 -and $slots -ge 2) { Check note 'One RAM stick' 'single channel, slower; add a matching stick' }
+    if (@($ram | % { "$($_.PartNumber)".Trim() } | Sort-Object -Unique).Count -gt 1) { Check note 'Mixed RAM sticks' 'different models, can be unstable' }
     if ($batt) { Check (Sev $battPct 80 60) "Battery $battPct% of original capacity" ('{0:N0} / {1:N0} mWh' -f [double]$batt.FullChargeCapacity, [double]$batt.DesignCapacity) }
     if ($crashes) { Check $(if ($crashes -ge 5) { 'fix' } else { 'review' }) "$crashes unexpected restart$(if ($crashes -gt 1) { 's' }), 30 days" (($crashEv | ? Id -eq 41 | Select-Object -First 3 | % { $_.TimeCreated.ToString('dd MMM') }) -join ', ') }
     else { Check ok 'No crashes, 30 days' '' }
@@ -243,10 +265,10 @@ $drives = "<div class=x><table class=data><thead><tr><th>Drive</th><th>Life</th>
     (($vols | % { "<tr><td>$(E "$($_.Drive) $($_.Label)")</td><td>$(E $_.Size)</td><td>$(E $_.Free)</td><td>$(E $_.BitLocker)</td></tr>" }) -join '') + '</tbody></table></div>'
 
 $hw = KV @(
-    'Model', "$($cs.Manufacturer) $($cs.Model)"; 'Serial', $bios.SerialNumber
+    'Model', "$maker $model"; 'Type', $pcType; 'Serial', $serial
     'Motherboard', "$($board.Manufacturer) $($board.Product)"; 'BIOS', "$($bios.SMBIOSBIOSVersion) $dot $($bios.ReleaseDate.ToString('dd MMM yyyy'))"
     'CPU', "$cpuName $dot $($cpu.NumberOfCores)C / $($cpu.NumberOfLogicalProcessors)T"
-    'GPU', (($gpus | % { $_.Name }) -join "  $dot  ")
+    ($gpus | % { 'GPU', ("$($_.Name) $dot $(Size $(if ($vram[$_.Name]) { $vram[$_.Name] } else { $_.AdapterRAM })) $dot driver $($_.DriverVersion)" -replace " $dot\s+$dot", " $dot") })
     'RAM', "$ramGB GB $dot $($ram.Count) of $slots slots"
     ($ram | % { "  $($_.DeviceLocator)", ("$($_.Capacity / 1GB) GB $dot $($_.ConfiguredClockSpeed) MHz $dot $($_.Manufacturer) $($_.PartNumber)".Trim()) })
     'Display', "$($screens -join ', ')$(if ($res) { "  $dot  $res" })"
@@ -282,14 +304,26 @@ $tests = '<ul class=tests>' +
     '<div id=cam hidden><video id=vid autoplay muted playsinline></video><span class=bar id=mic><i></i></span><p class=m id=camn></p></div>' +
     '<div id=fs hidden><span>Click: next colour &middot; Esc: exit</span></div>'
 $manual = '<ul class=manual>' + ((@(
-    "Serial on the sticker / under the battery matches S/N $($bios.SerialNumber)"
-    'Body: no cracks, hinges firm, no missing screws, screen does not wobble'
-    'Battery not swollen: case flat, touchpad not raised'
-    'Every USB port, HDMI, audio jack and SD slot works; charge port does not wiggle'
-    'Original charger with the right wattage; laptop charges and runs unplugged'
-    'Touchpad clicks, keyboard backlight, fingerprint / face login'
-    'Wi-Fi connects and Bluetooth pairs'
-    'Stress test 10 min (Cinebench R23) while watching HWiNFO: CPU under 95&deg;C, fans not grinding'
+    'CPU, GPU, RAM and drives above match what the seller advertised'
+    if ($isLaptop) {
+        "Serial on the sticker / under the battery matches S/N $serial"
+        'Body: no cracks, hinges firm, no missing screws, screen does not wobble'
+        'Battery not swollen: case flat, touchpad not raised'
+        'Every USB port, HDMI, audio jack and SD slot works; charge port does not wiggle'
+        'Original charger with the right wattage; laptop charges and runs unplugged'
+        'Touchpad clicks, keyboard backlight, fingerprint / face login'
+        'Wi-Fi connects and Bluetooth pairs'
+        'Stress test 10 min (Cinebench R23) while watching HWiNFO: CPU under 95&deg;C, fans not grinding'
+    } else {
+        'Open the side panel: no thick dust, burnt smell, bulging capacitors or loose cables'
+        'PSU: known brand, wattage on the label is enough for the GPU (avoid no-name units)'
+        'GPU: VRAM above matches the advertised card; confirm in GPU-Z (fake re-flashed cards exist)'
+        'Ask if the GPU was used for mining; look for worn fans, discoloured backplate, missing screws'
+        'All fans spin (CPU, case, GPU) with no rattle or grinding'
+        'Front and rear USB, audio jacks and every video output on the GPU work'
+        'Stress test 10 min: Cinebench R23 (CPU), then FurMark or 3DMark (GPU), watching HWiNFO: CPU under 90&deg;C, GPU under 85&deg;C, no crash or black screen'
+        'BIOS clock is correct (wrong time = dead CMOS battery)'
+    }
     'BIOS opens with no password (F2 / Del at boot)'
     'Receipt or warranty; check the serial on the maker''s warranty site'
     'After buying: Reset this PC, sign in with your own account, no "managed by your organisation" screen'
@@ -297,7 +331,7 @@ $manual = '<ul class=manual>' + ((@(
 
 $i = 0
 function Part($title, $html) { $script:i++; "<section style='--i:$script:i'><h2>$(E $title)</h2>$html</section>" }
-$body = "<header style='--i:0'><div><h1>$(E $cs.Model)</h1><p>$(E "$($cs.Manufacturer) $dot S/N $($bios.SerialNumber) $dot $osName $dot $(Get-Date -f 'dd MMM yyyy, HH:mm')")</p></div>" +
+$body = "<header style='--i:0'><div><h1>$(E $model)</h1><p>$(E "$maker $dot S/N $serial $dot $osName $dot $(Get-Date -f 'dd MMM yyyy, HH:mm')")</p></div>" +
     "<div class=right><span class='verdict $($verdict[0])'><span class=dot></span>$($verdict[1])</span><button onclick=print()>Print</button></div></header>" +
     (Part 'Checks' "<ul class=checks>$checkHtml</ul>") + (Part 'Drives' $drives) + (Part 'Hardware' $hw) +
     (Part 'License' $lic) + (Part 'Security' $sec) + (Part 'Software' $sw) +
@@ -425,7 +459,7 @@ document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{const t=b.datase
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!fs.hidden)fsEnd()});
 </script></body></html>
 '@
-$html = $tpl.Replace('{{TITLE}}', (E "SecondLook - $($cs.Model)")).Replace('{{BODY}}', $body)
+$html = $tpl.Replace('{{TITLE}}', (E "SecondLook - $model")).Replace('{{BODY}}', $body)
 
 # ---------------- save ----------------
 $dl = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path
